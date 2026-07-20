@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
 # DB-IP Lite is CC-BY-4.0, so unlike GeoLite2 it may ship inside the image.
 # Download it at build time to keep a working geo setup with no signup:
 #   docker build --build-arg WITH_GEO=1 .
-FROM alpine:3.20 AS geo
+FROM alpine:3.24 AS geo
 ARG WITH_GEO=0
 RUN mkdir -p /geo && if [ "$WITH_GEO" = "1" ]; then \
       apk add --no-cache curl && \
