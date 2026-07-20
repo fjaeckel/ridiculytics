@@ -1,7 +1,6 @@
 # ridiculytics
 
 [![CI](https://github.com/fjaeckel/ridiculytics/actions/workflows/ci.yml/badge.svg)](https://github.com/fjaeckel/ridiculytics/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/fjaeckel/ridiculytics)](https://goreportcard.com/report/github.com/fjaeckel/ridiculytics)
 [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
 Privacy-first web analytics that stores nothing and speaks Prometheus.
