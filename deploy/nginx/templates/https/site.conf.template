@@ -1,0 +1,53 @@
+# TLS mode — NGINX_MODE=https.
+#
+# Requires a real certificate at /etc/letsencrypt/live/${STATS_DOMAIN}/.
+# nginx will refuse to start without it, which is deliberate: a missing
+# certificate should be a loud failure, not a silently self-signed one that
+# every browser rejects anyway. Issue it first from http mode.
+
+limit_req_zone $binary_remote_addr zone=ingest:10m rate=30r/s;
+limit_conn_zone $binary_remote_addr zone=conns:10m;
+
+# Real client IP. Everything downstream depends on this: geolocation, ASN,
+# rate limiting and the visitor hash all read it.
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${STATS_DOMAIN};
+
+    # Renewal happens over webroot, so nginx never stops and certbot never
+    # binds a port of its own. This must stay reachable over plain HTTP.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+        allow all;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${STATS_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${STATS_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${STATS_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    add_header Strict-Transport-Security "max-age=63072000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    server_tokens off;
+
+    include /etc/nginx/snippets/ridiculytics-proxy.conf;
+}

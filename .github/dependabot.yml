@@ -1,0 +1,73 @@
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels: [dependencies, go]
+    commit-message:
+      prefix: "deps"
+    groups:
+      # The Prometheus client and its transitive deps move together; separate
+      # PRs for each just create merge conflicts.
+      prometheus:
+        patterns:
+          - "github.com/prometheus/*"
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    labels: [dependencies, javascript]
+    commit-message:
+      prefix: "deps"
+    # esbuild is the only dependency and it is build-time only; it never ships
+    # to a visitor's browser.
+    groups:
+      build-tools:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: "deps"
+
+  # The compose files pin nginx, certbot, prometheus and grafana. Without this
+  # they would drift indefinitely, which matters most for nginx: it terminates
+  # TLS for the whole deployment.
+  - package-ecosystem: docker-compose
+    directories:
+      - "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: "deps"

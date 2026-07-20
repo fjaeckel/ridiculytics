@@ -1,0 +1,17 @@
+{
+  "name": "ridiculytics",
+  "version": "1.0.0",
+  "description": "Tiny, cookieless analytics script for the ridiculytics collector.",
+  "main": "web/counter.js",
+  "files": ["web/counter.js", "web/counter.min.js", "LICENSE-MIT"],
+  "scripts": {
+    "build": "esbuild web/counter.js --minify --target=es5 --outfile=web/counter.min.js --legal-comments=none",
+    "size": "gzip -c web/counter.min.js | wc -c"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "keywords": ["analytics", "privacy", "prometheus", "cookieless", "self-hosted"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/fjaeckel/ridiculytics.git" }
+}

@@ -1,0 +1,255 @@
+{
+  "title": "Ridiculytics",
+  "uid": "ridiculytics",
+  "tags": ["analytics"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "site",
+        "label": "Site",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS}" },
+        "query": "label_values(ridiculytics_pageviews_total, site)",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "path",
+        "label": "Page",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS}" },
+        "query": "label_values(ridiculytics_pageviews_by_country_total{site=\"$site\"}, path)",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "description": "Filters every breakdown below to one page. This is the cross-dimension slice the two-label design buys you."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Unique visitors (24h)",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "description": "HyperLogLog estimate, ~0.8% error. Sampled as a gauge, so use max_over_time for a specific day rather than summing.",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "ridiculytics_unique_visitors{site=\"$site\", window=\"24h\"}", "legendFormat": "visitors" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Active now",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "description": "Distinct visitors in the last 5 minutes.",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "ridiculytics_visitors_active{site=\"$site\"}" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "Pageviews",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(increase(ridiculytics_pageviews_total{site=\"$site\", path=~\"$path\"}[$__range]))" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Bounce rate",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "description": "Sessions that ended after a single pageview. Not filterable by page: a bounce is a property of the session, not the page.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }, { "color": "yellow", "value": 0.6 }, { "color": "red", "value": 0.8 }] }
+        }
+      },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{
+        "expr": "sum(increase(ridiculytics_bounces_total{site=\"$site\"}[$__range])) / clamp_min(sum(increase(ridiculytics_sessions_total{site=\"$site\"}[$__range])), 1)"
+      }]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Avg session",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{
+        "expr": "sum(increase(ridiculytics_session_duration_seconds_sum{site=\"$site\"}[$__range])) / clamp_min(sum(increase(ridiculytics_session_duration_seconds_count{site=\"$site\"}[$__range])), 1)"
+      }]
+    },
+    {
+      "id": 6, "type": "stat", "title": "Views / session",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2 } },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{
+        "expr": "sum(increase(ridiculytics_pageviews_total{site=\"$site\"}[$__range])) / clamp_min(sum(increase(ridiculytics_sessions_total{site=\"$site\"}[$__range])), 1)"
+      }]
+    },
+
+    {
+      "id": 10, "type": "timeseries", "title": "Pageviews",
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 40, "lineWidth": 0, "stacking": { "mode": "normal" } }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{
+        "expr": "sum by (path) (increase(ridiculytics_pageviews_total{site=\"$site\", path=~\"$path\"}[$__interval]))",
+        "legendFormat": "{{path}}"
+      }]
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Unique visitors by window",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "description": "Each window is computed server-side from its own sketch. Sketches cannot be merged in PromQL, so uniques over an arbitrary range are not derivable from these.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
+      "targets": [{
+        "expr": "ridiculytics_unique_visitors{site=\"$site\"}",
+        "legendFormat": "{{window}}"
+      }]
+    },
+
+    {
+      "id": 20, "type": "table", "title": "Top pages",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 12 },
+      "targets": [{
+        "expr": "topk(20, sum by (path) (increase(ridiculytics_pageviews_total{site=\"$site\", path=~\"$path\"}[$__range])))",
+        "instant": true, "format": "table"
+      }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "path": "Page", "Value": "Views" } } },
+        { "id": "sortBy", "options": { "sort": [{ "field": "Views", "desc": true }] } }
+      ]
+    },
+    {
+      "id": 21, "type": "table", "title": "Top referrers",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 12 },
+      "description": "Note the sum by (referrer): with two labels you must aggregate away the one you are not asking about, or you get one row per (referrer, path) pair.",
+      "targets": [{
+        "expr": "topk(20, sum by (referrer) (increase(ridiculytics_pageviews_by_referrer_total{site=\"$site\", path=~\"$path\"}[$__range])))",
+        "instant": true, "format": "table"
+      }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "referrer": "Referrer", "Value": "Views" } } },
+        { "id": "sortBy", "options": { "sort": [{ "field": "Views", "desc": true }] } }
+      ]
+    },
+
+    {
+      "id": 30, "type": "table", "title": "Countries",
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 21 },
+      "targets": [{
+        "expr": "topk(20, sum by (country) (increase(ridiculytics_pageviews_by_country_total{site=\"$site\", path=~\"$path\"}[$__range])))",
+        "instant": true, "format": "table"
+      }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "country": "Country", "Value": "Views" } } },
+        { "id": "sortBy", "options": { "sort": [{ "field": "Views", "desc": true }] } }
+      ]
+    },
+    {
+      "id": 31, "type": "piechart", "title": "Browsers",
+      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 21 },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "targets": [{
+        "expr": "sum by (browser) (increase(ridiculytics_pageviews_by_browser_total{site=\"$site\", path=~\"$path\"}[$__range]))",
+        "legendFormat": "{{browser}}", "instant": true
+      }]
+    },
+    {
+      "id": 32, "type": "piechart", "title": "Devices",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 21 },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "targets": [{
+        "expr": "sum by (device) (increase(ridiculytics_pageviews_by_device_total{site=\"$site\", path=~\"$path\"}[$__range]))",
+        "legendFormat": "{{device}}", "instant": true
+      }]
+    },
+
+    {
+      "id": 40, "type": "table", "title": "Entry pages",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 30 },
+      "targets": [{
+        "expr": "topk(10, sum by (path) (increase(ridiculytics_entries_total{site=\"$site\"}[$__range])))",
+        "instant": true, "format": "table"
+      }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "path": "Page", "Value": "Entries" } } }
+      ]
+    },
+    {
+      "id": 41, "type": "table", "title": "Exit pages",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 30 },
+      "targets": [{
+        "expr": "topk(10, sum by (path) (increase(ridiculytics_exits_total{site=\"$site\"}[$__range])))",
+        "instant": true, "format": "table"
+      }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "path": "Page", "Value": "Exits" } } }
+      ]
+    },
+    {
+      "id": 42, "type": "table", "title": "Goals & custom events",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 30 },
+      "targets": [{
+        "expr": "topk(10, sum by (name) (increase(ridiculytics_events_total{site=\"$site\", path=~\"$path\"}[$__range])))",
+        "instant": true, "format": "table"
+      }],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "name": "Event", "Value": "Count" } } }
+      ]
+    },
+
+    {
+      "id": 50, "type": "row", "title": "Collector health", "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "panels": [
+        {
+          "id": 51, "type": "timeseries", "title": "Share of pageviews folded into __other__",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 39 },
+          "description": "When this climbs, your breakdowns are increasingly showing __other__ instead of real values. Raise cross_path_cap or add a path_rewrite.",
+          "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+          "targets": [{
+            "expr": "sum by (dimension) (rate(ridiculytics_cardinality_capped_total{site=\"$site\"}[$__rate_interval])) / clamp_min(sum(rate(ridiculytics_pageviews_total{site=\"$site\"}[$__rate_interval])), 0.001)",
+            "legendFormat": "{{dimension}}"
+          }]
+        },
+        {
+          "id": 52, "type": "timeseries", "title": "Ingest outcomes",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 39 },
+          "fieldConfig": { "defaults": { "unit": "reqps" } },
+          "targets": [{
+            "expr": "sum by (result) (rate(ridiculytics_ingest_events_total{site=\"$site\"}[$__rate_interval]))",
+            "legendFormat": "{{result}}"
+          }]
+        },
+        {
+          "id": 53, "type": "timeseries", "title": "Admitted label values",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 47 },
+          "description": "How full each cardinality cap is. A dimension pinned at its cap is one to tune.",
+          "targets": [{
+            "expr": "ridiculytics_label_values{site=\"$site\"}",
+            "legendFormat": "{{dimension}}"
+          }]
+        },
+        {
+          "id": 54, "type": "timeseries", "title": "Queue depth & live sessions",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 47 },
+          "targets": [
+            { "expr": "ridiculytics_queue_depth", "legendFormat": "queue" },
+            { "expr": "ridiculytics_sessions_live{site=\"$site\"}", "legendFormat": "live sessions" }
+          ]
+        }
+      ]
+    }
+  ]
+}

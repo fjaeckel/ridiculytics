@@ -1,0 +1,36 @@
+# Plain HTTP mode — NGINX_MODE=http (the default).
+#
+# Two legitimate uses:
+#   1. Bootstrap. Run in this mode, issue a certificate with the tls profile,
+#      then switch to NGINX_MODE=https. No self-signed placeholder needed:
+#      nginx never references a certificate file that does not exist yet.
+#   2. TLS terminated elsewhere — a cloud load balancer, Cloudflare, or an
+#      existing edge proxy. Keep this host off the public internet if so.
+#
+# Do not serve real traffic from this mode on a public address: beacons travel
+# in cleartext, and any HTTPS page embedding counter.js will refuse the request
+# as mixed content.
+
+limit_req_zone $binary_remote_addr zone=ingest:10m rate=30r/s;
+limit_conn_zone $binary_remote_addr zone=conns:10m;
+
+# Real client IP. Everything downstream depends on this: geolocation, ASN,
+# rate limiting and the visitor hash all read it.
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${STATS_DOMAIN};
+
+    # Served even in http mode so a certificate can be issued from here before
+    # switching to https.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+        allow all;
+    }
+
+    include /etc/nginx/snippets/ridiculytics-proxy.conf;
+}

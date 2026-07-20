@@ -1,0 +1,204 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.2.3)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26"
+
+jobs:
+  # Never publish something that does not pass its own tests. Tags are
+  # immutable in practice once people depend on them, and jsDelivr caches
+  # aggressively, so a bad release is expensive to walk back.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Tag must match package.json
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "${TAG#v}" != "$PKG" ]; then
+            echo "::error::tag ${TAG} does not match package.json version ${PKG}"
+            echo "npm would publish a version nobody can find from the git history."
+            exit 1
+          fi
+
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - run: node --test web/counter.test.js
+
+  binaries:
+    name: Binaries
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cross-compile
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          mkdir -p dist
+          targets="linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64 windows/amd64 freebsd/amd64"
+          for target in $targets; do
+            GOOS=${target%/*}
+            GOARCH=${target#*/}
+            name="ridiculytics_${VERSION}_${GOOS}_${GOARCH}"
+            out="ridiculytics"
+            [ "$GOOS" = "windows" ] && out="ridiculytics.exe"
+
+            echo "building $name"
+            env CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+              -trimpath \
+              -ldflags "-s -w -X main.version=${VERSION}" \
+              -o "dist/$out" ./cmd/ridiculytics
+
+            cp README.md LICENSE LICENSE-MIT sites.yaml dist/
+            tar -czf "dist/${name}.tar.gz" -C dist \
+              "$out" README.md LICENSE LICENSE-MIT sites.yaml
+            rm -f "dist/$out" dist/README.md dist/LICENSE dist/LICENSE-MIT dist/sites.yaml
+          done
+
+          cd dist && sha256sum *.tar.gz > checksums.txt && cat checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
+
+  image:
+    name: Container image
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ needs.verify.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # counter.js reaches sites through jsDelivr, which serves from npm. Publishing
+  # here is what makes cdn.jsdelivr.net/npm/ridiculytics@N/counter.min.js resolve.
+  #
+  # jsDelivr also serves straight from a git tag with no npm involvement at all:
+  #   https://cdn.jsdelivr.net/gh/OWNER/ridiculytics@vN/web/counter.min.js
+  # That path needs no secret, so this job is skipped rather than failed when
+  # NPM_TOKEN is absent.
+  npm:
+    name: Publish to npm for jsDelivr
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build minified bundle
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          GZ=$(gzip -9 -c web/counter.min.js | wc -c)
+          echo "publishing counter.min.js at ${GZ}B gzipped"
+          if [ "$GZ" -gt 2048 ]; then
+            echo "::error::over the 2048B budget; refusing to publish"
+            exit 1
+          fi
+
+      - name: Check for a publish token
+        id: token
+        run: |
+          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NPM_TOKEN is not set, skipping npm publish. \
+              jsDelivr will still serve this release from the git tag."
+          fi
+
+      - name: Publish
+        if: steps.token.outputs.present == 'true'
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # jsDelivr caches npm packages for up to 24h. Nudging it means the new
+      # version is fetchable immediately rather than whenever the cache lapses.
+      - name: Warm the jsDelivr cache
+        if: steps.token.outputs.present == 'true'
+        continue-on-error: true
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          sleep 30
+          for path in \
+            "npm/ridiculytics@${VERSION}/web/counter.min.js" \
+            "npm/ridiculytics@${VERSION}/web/counter.js"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://cdn.jsdelivr.net/${path}")
+            echo "${path} -> ${code}"
+          done

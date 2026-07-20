@@ -1,0 +1,136 @@
+# PRODUCTION STACK — ridiculytics + nginx, plus certbot only if you enable it.
+#
+# There is deliberately no Prometheus and no Grafana here. Scrape the metrics
+# port from your existing monitoring. For a self-contained demo of the whole
+# pipeline, use docker-compose.e2e.yml instead.
+#
+# Configuration is entirely environment variables; see .env.example. There is
+# no YAML config file to edit — ridiculytics runs with no -config flag.
+#
+#   cp .env.example .env && $EDITOR .env
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# TLS is opt-in. See the "Certificates" section of .env.example.
+
+services:
+  ridiculytics:
+    build:
+      context: .
+      args:
+        WITH_GEO: ${WITH_GEO:-0}
+    image: ridiculytics:${RIDICULYTICS_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      RIDICULYTICS_INGEST_ADDR: ":8080"
+      RIDICULYTICS_METRICS_ADDR: ":9090"
+
+      # Mandatory behind a proxy. Without it every visitor appears to come from
+      # the nginx container: geolocation and ASN are wrong for everyone, and the
+      # per-/24 rate limiter throttles your whole audience as one client.
+      RIDICULYTICS_TRUST_PROXY: "true"
+
+      RIDICULYTICS_SITES: ${RIDICULYTICS_SITES:?set RIDICULYTICS_SITES in .env}
+      RIDICULYTICS_WORKERS: ${RIDICULYTICS_WORKERS:-4}
+      RIDICULYTICS_QUEUE_SIZE: ${RIDICULYTICS_QUEUE_SIZE:-8192}
+      RIDICULYTICS_RATE_PER_MIN: ${RIDICULYTICS_RATE_PER_MIN:-600}
+      RIDICULYTICS_SALT_ROTATE: ${RIDICULYTICS_SALT_ROTATE:-24h}
+      RIDICULYTICS_SERVE_COUNTER_JS: ${RIDICULYTICS_SERVE_COUNTER_JS:-true}
+
+      # Cardinality. This is the knob that decides your series count.
+      RIDICULYTICS_PATH_CAP: ${RIDICULYTICS_PATH_CAP:-200}
+      RIDICULYTICS_CROSS_PATH_CAP: ${RIDICULYTICS_CROSS_PATH_CAP:-50}
+      RIDICULYTICS_PATH_LABELS: ${RIDICULYTICS_PATH_LABELS:-country,referrer,source,medium,campaign,browser,os,device,screen,event}
+      RIDICULYTICS_ADMIT_MIN_COUNT: ${RIDICULYTICS_ADMIT_MIN_COUNT:-3}
+      RIDICULYTICS_SESSION_TTL: ${RIDICULYTICS_SESSION_TTL:-30m}
+      RIDICULYTICS_DECAY_AFTER: ${RIDICULYTICS_DECAY_AFTER:-168h}
+
+      RIDICULYTICS_GEO_PROVIDER: ${RIDICULYTICS_GEO_PROVIDER:-none}
+      RIDICULYTICS_GEO_CITY_DB: ${RIDICULYTICS_GEO_CITY_DB:-}
+      RIDICULYTICS_GEO_ASN_DB: ${RIDICULYTICS_GEO_ASN_DB:-}
+    env_file:
+      # Per-site overrides land here: RIDICULYTICS_SITE_EXAMPLE_COM_ORIGINS etc.
+      - path: .env
+        required: false
+    ports:
+      # Metrics on loopback only. A Prometheus on this host can scrape
+      # 127.0.0.1:9090; the internet cannot. Never change this to 0.0.0.0 —
+      # the metrics port has no authentication by design.
+      - "127.0.0.1:${METRICS_PORT:-9090}:9090"
+    volumes:
+      - ${GEO_DIR:-./deploy/geo}:/var/lib/ridiculytics:ro
+    networks: [edge]
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [ridiculytics]
+    environment:
+      STATS_DOMAIN: ${STATS_DOMAIN:?set STATS_DOMAIN in .env}
+      # Substitute ONLY ${STATS_DOMAIN}. Without this filter, envsubst would
+      # also rewrite any nginx variable that happened to share a name with an
+      # environment variable.
+      NGINX_ENVSUBST_FILTER: "^STATS_DOMAIN$$"
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx/conf.d
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # http or https. In http mode nginx never references a certificate file,
+      # so there is no chicken-and-egg and no placeholder certificate needed.
+      - ./deploy/nginx/templates/${NGINX_MODE:-http}:/etc/nginx/templates:ro
+      - ./deploy/nginx/snippets:/etc/nginx/snippets:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+    # Reload every 6h so a renewed certificate is picked up without a restart.
+    command: >
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done &
+                  exec nginx -g 'daemon off;'"
+    networks: [edge]
+    logging: *logging
+
+  # ── TLS, opt-in via COMPOSE_PROFILES=tls ───────────────────────────────────
+  # Neither of these starts unless the profile is active, so a deployment that
+  # terminates TLS elsewhere never runs certbot at all.
+
+  # One-shot initial issuance. Run it once, by name, while NGINX_MODE=http:
+  #   docker compose -f docker-compose.prod.yml run --rm certbot-init
+  certbot-init:
+    image: certbot/certbot:latest
+    profiles: [tls]
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: >
+      certbot certonly --webroot -w /var/www/certbot
+        --non-interactive --agree-tos
+        --email ${CERTBOT_EMAIL:?set CERTBOT_EMAIL in .env}
+        ${CERTBOT_STAGING:+--staging}
+        -d ${STATS_DOMAIN:?set STATS_DOMAIN in .env}
+
+  # Long-running renewal loop. Renews over webroot, so it never binds a port
+  # and nginx never goes down for a renewal.
+  certbot:
+    image: certbot/certbot:latest
+    profiles: [tls]
+    restart: unless-stopped
+    depends_on: [nginx]
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+                  while :; do
+                    certbot renew --webroot -w /var/www/certbot --quiet;
+                    sleep 12h & wait $${!};
+                  done"
+    logging: *logging
+
+volumes:
+  letsencrypt:
+  certbot-webroot:
+
+networks:
+  edge:

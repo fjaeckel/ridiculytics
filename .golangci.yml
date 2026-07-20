@@ -1,0 +1,33 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - misspell
+    - unconvert
+    - copyloopvar
+
+  # No misspell locale is set on purpose. Forcing one rewrites identifiers,
+  # not just prose — with locale: UK it flags the `autonomous_system_organization`
+  # maxminddb struct tag, and "correcting" that spelling would silently break
+  # every ASN lookup, since the tag must match the database schema exactly.
+  # Left unset, misspell catches real typos and leaves spelling variants alone.
+
+  exclusions:
+    rules:
+      # Tests deliberately ignore errors on cleanup paths and on calls whose
+      # failure is the thing under test.
+      - path: _test\.go
+        linters: [errcheck, bodyclose]
+
+formatters:
+  enable:
+    - gofmt

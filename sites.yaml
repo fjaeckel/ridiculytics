@@ -1,0 +1,88 @@
+# ridiculytics configuration.
+# Reload without restarting: kill -HUP $(pidof ridiculytics)
+
+server:
+  # Public. This is where counter.js posts.
+  ingest_addr: ":8080"
+  # Private. Never needs to face the internet.
+  metrics_addr: "127.0.0.1:9090"
+  queue_size: 8192
+  workers: 4
+  max_body_bytes: 4096
+  rate_per_min: 600
+  salt_rotate: 24h
+  serve_counter_js: true
+  # Only enable behind a reverse proxy you control. When true, X-Forwarded-For
+  # is trusted, which lets any direct caller forge its own geolocation.
+  trust_proxy: false
+
+geo:
+  # dbip | maxmind | none
+  #
+  # dbip is the default because DB-IP Lite is CC-BY-4.0 and redistributable,
+  # so it ships in the container and needs no signup. MaxMind GeoLite2 is more
+  # accurate but requires an account and its EULA forbids redistribution.
+  provider: none
+  # city_db: /var/lib/ridiculytics/dbip-city-lite.mmdb
+  # asn_db:  /var/lib/ridiculytics/dbip-asn-lite.mmdb
+
+defaults:
+  # Paths in the dedicated pageviews_total family.
+  path_cap: 200
+  # Paths used as a secondary label on every other family. This is the knob
+  # that decides your series count: 0 labels ~900/site, 50 ~8k/site,
+  # 200 ~28k/site. Start here before tuning anything else.
+  cross_path_cap: 50
+  referrer_cap: 200
+  asn_cap: 200
+  campaign_cap: 100
+  event_cap: 50
+
+  # How often a value must be seen before it earns its own series. Raise this
+  # if a crawler is filling your __other__ bucket.
+  admit_min_count: 3
+
+  # Which families carry a secondary path label.
+  # asn is off by default: worst multiplier, least-asked cross-slice.
+  path_labels:
+    - country
+    - referrer
+    - source
+    - medium
+    - campaign
+    - browser
+    - os
+    - device
+    - screen
+    - event
+
+  unique_visitors_by_path: false
+  region_enabled: false
+  city_enabled: false
+
+  session_ttl: 30m
+  decay_after: 168h # 7d
+
+sites:
+  - domain: example.com
+    origins:
+      - "https://example.com"
+      - "https://www.example.com"
+
+  # A busy site buying less cardinality.
+  # - domain: busy.example.net
+  #   origins: ["https://busy.example.net"]
+  #   cross_path_cap: 25
+  #   path_labels: [country, referrer]
+
+  # One small site buying the full cube.
+  # - domain: tiny.example.org
+  #   origins: ["https://tiny.example.org"]
+  #   cross_path_cap: 200
+  #   unique_visitors_by_path: true
+  #   path_labels:
+  #     [country, referrer, source, medium, campaign,
+  #      browser, os, device, screen, event, asn]
+  #   path_rewrites:
+  #     - match: "^/products/[^/]+$"
+  #       replace: "/products/:slug"

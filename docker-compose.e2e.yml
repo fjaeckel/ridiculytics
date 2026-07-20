@@ -1,0 +1,61 @@
+# END-TO-END TEST STACK — not for production.
+#
+# Brings up ridiculytics plus a throwaway Prometheus and Grafana so you can see
+# the whole pipeline working locally. No TLS, anonymous Grafana admin, no
+# certbot. For a real deployment use docker-compose.prod.yml.
+#
+#   docker compose -f docker-compose.e2e.yml up
+#   ingest      http://localhost:8080/api/event
+#   grafana     http://localhost:3000  (anonymous, admin)
+#   prometheus  http://localhost:9091
+
+services:
+  ridiculytics:
+    build:
+      context: .
+      args:
+        WITH_GEO: "0" # set to 1 to bake in DB-IP Lite geo databases
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # public ingest only
+    volumes:
+      - ./sites.yaml:/etc/ridiculytics/sites.yaml:ro
+    networks: [analytics]
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2y
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    networks: [analytics]
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks: [analytics]
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  analytics:

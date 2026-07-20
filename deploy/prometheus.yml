@@ -1,0 +1,14 @@
+global:
+  # Unique-visitor gauges are sampled, not accumulated, so the scrape interval
+  # is the resolution limit for "visitors right now". 15s is a good default;
+  # do not raise it above 60s or the active-visitor line gets chunky.
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  - job_name: ridiculytics
+    static_configs:
+      - targets: ["ridiculytics:9090"]

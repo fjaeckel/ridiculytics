@@ -1,0 +1,58 @@
+# Alerting on traffic is the thing hosted analytics dashboards are worst at and
+# Prometheus is best at. This is the actual reason to run ridiculytics rather
+# than a conventional analytics product.
+groups:
+  - name: ridiculytics-traffic
+    rules:
+      - alert: TrafficStopped
+        expr: sum by (site) (rate(ridiculytics_pageviews_total[10m])) == 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "No pageviews for {{ $labels.site }} in 15 minutes"
+          description: "Usually a broken deploy, a DNS change, or counter.js failing to load."
+
+      - alert: TrafficSpike
+        expr: |
+          sum by (site) (rate(ridiculytics_pageviews_total[5m]))
+            > 10 * sum by (site) (rate(ridiculytics_pageviews_total[6h] offset 5m))
+        for: 10m
+        labels: { severity: info }
+        annotations:
+          summary: "{{ $labels.site }} traffic is 10x its 6h baseline"
+          description: "Either you are on the front page of something, or you are being scraped."
+
+  - name: ridiculytics-health
+    rules:
+      # The cap folding a large share of traffic means your dashboards are
+      # showing __other__ instead of real values. Raise cross_path_cap or add
+      # a path_rewrite.
+      - alert: CardinalityCapBiting
+        expr: |
+          sum by (site) (rate(ridiculytics_cardinality_capped_total{dimension="path_cross"}[30m]))
+            / sum by (site) (rate(ridiculytics_pageviews_total[30m])) > 0.3
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.site }} is folding >30% of pageviews into __other__"
+
+      - alert: IngestQueueBacklog
+        expr: ridiculytics_queue_depth > 4000
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Aggregation is falling behind ingest"
+
+      - alert: EventsDropped
+        expr: rate(ridiculytics_ingest_events_total{result="queue_full"}[5m]) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Events are being dropped for {{ $labels.site }}"
+
+      - alert: GeoIPDatabaseStale
+        expr: ridiculytics_geoip_db_age_seconds > 60 * 60 * 24 * 60
+        labels: { severity: info }
+        annotations:
+          summary: "GeoIP database is over 60 days old"
+          description: "Stale geo is silent geo: lookups increasingly miss and fall into __none__."

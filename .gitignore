@@ -1,0 +1,9 @@
+# Internal design notes — never commit.
+DESIGN.md
+
+bin/
+node_modules/
+web/counter.min.js
+*.mmdb
+*.mmdb.gz
+sites.local.yaml
