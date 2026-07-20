@@ -19,12 +19,8 @@ env:
 
 jobs:
   go:
-    name: Go ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    name: Go
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -34,14 +30,12 @@ jobs:
           cache: true
 
       - name: Verify modules are tidy
-        if: matrix.os == 'ubuntu-latest'
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum \
             || { echo "::error::go.mod/go.sum are not tidy; run 'go mod tidy'"; exit 1; }
 
       - name: Check formatting
-        if: matrix.os == 'ubuntu-latest'
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -54,6 +48,24 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+      # The binary is deployed only as a Linux container and built with
+      # CGO_ENABLED=0, so the compiler output does not depend on the host OS.
+      # Spinning up macOS (10x billed) and Windows (2x) runners only to re-run
+      # OS-agnostic tests buys nothing. What can break per-GOOS is a build that
+      # does not compile, so we cross-compile every release target here instead.
+      # This keeps a broken darwin/windows build a CI failure rather than a
+      # release-time surprise, without paying for their runners.
+      - name: Cross-compile release targets
+        run: |
+          targets="linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64 windows/amd64 freebsd/amd64"
+          for target in $targets; do
+            GOOS=${target%/*}
+            GOARCH=${target#*/}
+            echo "building $GOOS/$GOARCH"
+            env CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH \
+              go build -o /dev/null ./cmd/ridiculytics
+          done
 
       # The race detector is the point of running tests in CI at all: the
       # aggregation path is concurrent and its bugs do not reproduce locally.
