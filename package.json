@@ -9,7 +9,7 @@
     "size": "gzip -c web/counter.min.js | wc -c"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.28.1"
   },
   "keywords": ["analytics", "privacy", "prometheus", "cookieless", "self-hosted"],
   "license": "MIT",
