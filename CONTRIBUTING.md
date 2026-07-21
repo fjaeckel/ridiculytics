@@ -86,9 +86,15 @@ otherwise npm would publish a version that cannot be traced back to a commit.
 <script src="https://cdn.jsdelivr.net/gh/fjaeckel/ridiculytics@v1/web/counter.min.js"></script>
 ```
 
-The npm publish step is skipped, not failed, when `NPM_TOKEN` is unset — the
-jsDelivr `gh` path keeps working regardless, so a fork gets a usable CDN URL
-without configuring any secrets.
+Publishing to npm uses a trusted publisher: npm is configured to trust
+`.github/workflows/release.yml` in this repo and issues a short-lived credential
+against the workflow's OIDC token, so there is no publish token to store or
+rotate. Renaming or moving that workflow file breaks publishing until the
+trusted publisher entry on npmjs.com is updated to match.
+
+The npm job is skipped on forks, since a fork cannot be a trusted publisher for
+a package it does not own. The jsDelivr `gh` path keeps working regardless, so a
+fork still gets a usable CDN URL without configuring anything.
 
 ## counter.js budget
 
