@@ -17,7 +17,10 @@ services:
     build:
       context: .
       args:
-        WITH_GEO: ${WITH_GEO:-0}
+        # DB-IP Lite country and ASN ship in the image. WITH_GEO_CITY=1 adds
+        # the city database (+131 MB); WITH_GEO=0 builds with no geo data.
+        WITH_GEO: ${WITH_GEO:-1}
+        WITH_GEO_CITY: ${WITH_GEO_CITY:-0}
     image: ridiculytics:${RIDICULYTICS_VERSION:-latest}
     restart: unless-stopped
     environment:
@@ -44,8 +47,11 @@ services:
       RIDICULYTICS_SESSION_TTL: ${RIDICULYTICS_SESSION_TTL:-30m}
       RIDICULYTICS_DECAY_AFTER: ${RIDICULYTICS_DECAY_AFTER:-168h}
 
-      RIDICULYTICS_GEO_PROVIDER: ${RIDICULYTICS_GEO_PROVIDER:-none}
+      # Left unset, the databases are discovered: the GEO_DIR mount below
+      # first, then the ones baked into the image. Set a path to pin one.
+      RIDICULYTICS_GEO_PROVIDER: ${RIDICULYTICS_GEO_PROVIDER:-dbip}
       RIDICULYTICS_GEO_CITY_DB: ${RIDICULYTICS_GEO_CITY_DB:-}
+      RIDICULYTICS_GEO_COUNTRY_DB: ${RIDICULYTICS_GEO_COUNTRY_DB:-}
       RIDICULYTICS_GEO_ASN_DB: ${RIDICULYTICS_GEO_ASN_DB:-}
     env_file:
       # Per-site overrides land here: RIDICULYTICS_SITE_EXAMPLE_COM_ORIGINS etc.
@@ -57,6 +63,9 @@ services:
       # the metrics port has no authentication by design.
       - "127.0.0.1:${METRICS_PORT:-9090}:9090"
     volumes:
+      # Optional, and empty by default. Databases baked into the image live in
+      # /usr/share, so an empty directory here hides nothing — drop a fresher
+      # .mmdb in to override the baked one without rebuilding the image.
       - ${GEO_DIR:-./deploy/geo}:/var/lib/ridiculytics:ro
     networks: [edge]
     logging: &logging

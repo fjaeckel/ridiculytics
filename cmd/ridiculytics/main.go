@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -133,13 +134,61 @@ func serve(s *http.Server, name string, log *slog.Logger, errCh chan<- error) {
 	}
 }
 
+// geoSearchDirs are scanned when a provider is selected but no database paths
+// are given. The mount point is searched first: a database an operator mounted
+// is refreshable, while one baked into the image is frozen at build time.
+var geoSearchDirs = []string{
+	"/var/lib/ridiculytics",
+	"/usr/share/ridiculytics/geo",
+}
+
+// geoCandidates maps a database kind to the filenames it is published under,
+// DB-IP Lite first and GeoLite2 second, so a mounted directory from either
+// source is picked up without configuration.
+var geoCandidates = map[string][]string{
+	"city":    {"dbip-city-lite.mmdb", "GeoLite2-City.mmdb"},
+	"country": {"dbip-country-lite.mmdb", "GeoLite2-Country.mmdb"},
+	"asn":     {"dbip-asn-lite.mmdb", "GeoLite2-ASN.mmdb"},
+}
+
+// discoverGeo returns the first existing file for each database kind. Any of
+// the results may be empty; geo.Open treats every path as optional.
+func discoverGeo(dirs []string) (city, country, asn string) {
+	find := func(kind string) string {
+		for _, dir := range dirs {
+			for _, name := range geoCandidates[kind] {
+				p := filepath.Join(dir, name)
+				if st, err := os.Stat(p); err == nil && !st.IsDir() {
+					return p
+				}
+			}
+		}
+		return ""
+	}
+	return find("city"), find("country"), find("asn")
+}
+
 func openGeo(g config.Geo, log *slog.Logger) (geo.Provider, error) {
 	switch g.Provider {
 	case "", "none":
 		log.Info("geolocation disabled; geo metric families will be absent")
 		return geo.Null{}, nil
 	case "dbip", "maxmind":
-		m, err := geo.Open(g.CityDB, g.CountryDB, g.ASNDB)
+		city, country, asn := g.CityDB, g.CountryDB, g.ASNDB
+		// Explicit configuration is never second-guessed: if any path is set,
+		// those are the databases, and a missing one is a startup failure
+		// rather than a silent fallback to whatever else is lying around.
+		if city == "" && country == "" && asn == "" {
+			city, country, asn = discoverGeo(geoSearchDirs)
+			if city == "" && country == "" && asn == "" {
+				log.Info("no geo databases found; geo metric families will be absent",
+					"searched", geoSearchDirs)
+			} else {
+				log.Info("discovered geo databases",
+					"city", city, "country", country, "asn", asn)
+			}
+		}
+		m, err := geo.Open(city, country, asn)
 		if err != nil {
 			return nil, fmt.Errorf("geo provider %s: %w", g.Provider, err)
 		}

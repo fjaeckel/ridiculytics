@@ -139,7 +139,13 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ needs.verify.outputs.version }}
+          # WITH_GEO bakes DB-IP Lite country and ASN into the image. It is the
+          # Dockerfile default; it is repeated here because a published image
+          # silently losing its geo databases is exactly the kind of regression
+          # nobody notices until the country panel is empty.
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+            WITH_GEO=1
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

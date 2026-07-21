@@ -86,18 +86,46 @@ redistribution clause in 2022. Nothing here depends on it.
 
 | provider | licence | ships in the image | notes |
 |---|---|---|---|
-| **DB-IP Lite** | CC-BY-4.0 | yes | recommended default, no signup |
+| **DB-IP Lite** | CC-BY-4.0 | country + ASN | the default, no signup, nothing to configure |
+| DB-IP Lite city | CC-BY-4.0 | opt-in | +131 MB; `--build-arg WITH_GEO_CITY=1` |
 | MaxMind GeoLite2 | proprietary | no | more accurate, needs a licence key |
 | `none` | — | — | fully supported; geo families go absent |
 
+The published image already contains the country and ASN databases, so country
+and ASN work on a container started with nothing but `RIDICULYTICS_SITES`. The
+city database is left out deliberately: it is 131 MB against a ~20 MB image,
+and the `city` dimension is opt-in anyway.
+
+### Where databases are found
+
+With no `GEO_*_DB` path set, each database is looked up by filename in:
+
+1. `/var/lib/ridiculytics` — the mount point for databases you supply
+2. `/usr/share/ridiculytics/geo` — the copies baked into the image
+
+Both DB-IP Lite (`dbip-country-lite.mmdb`) and GeoLite2 (`GeoLite2-Country.mmdb`)
+filenames are recognised, so mounting either layout needs no configuration.
+Each database resolves independently: a mount holding only a city database
+still leaves country and ASN on the baked-in copies.
+
+Setting any path explicitly disables discovery entirely, and a configured path
+that does not exist fails at startup rather than quietly falling back:
+
 ```sh
-WITH_GEO=1                      # bake DB-IP Lite into the image at build time
-RIDICULYTICS_GEO_PROVIDER=dbip
-RIDICULYTICS_GEO_CITY_DB=/var/lib/ridiculytics/dbip-city-lite.mmdb
+RIDICULYTICS_GEO_PROVIDER=dbip          # the default
+RIDICULYTICS_GEO_COUNTRY_DB=/var/lib/ridiculytics/dbip-country-lite.mmdb
 RIDICULYTICS_GEO_ASN_DB=/var/lib/ridiculytics/dbip-asn-lite.mmdb
 ```
 
-DB-IP Lite's licence requires attribution — link db-ip.com in your docs.
+### Keeping it fresh
+
+A baked-in database is frozen at image build time, so a container running an
+old tag has old geo data. `GeoIPDatabaseStale` fires at 60 days; the fix is
+either a newer image or a fresher `.mmdb` dropped into the `/var/lib` mount,
+which takes precedence without a rebuild.
+
+DB-IP Lite's licence requires attribution — link db-ip.com in your docs. The
+image redistributes it, so this applies to you if you deploy it.
 
 Alert on `ridiculytics_geoip_db_age_seconds`: stale geo is silent geo, since
 lookups increasingly miss and fall into `__none__`.

@@ -265,26 +265,54 @@ jobs:
         run: |
           docker run --rm ridiculytics:ci -version
 
+          # No geo configuration on purpose: the databases baked into the
+          # image must be discovered and used with nothing but SITES set.
           docker run -d --name smoke \
             -e RIDICULYTICS_SITES=example.com \
             -e RIDICULYTICS_INGEST_ADDR=:8080 \
             -e RIDICULYTICS_METRICS_ADDR=:9090 \
+            -e RIDICULYTICS_TRUST_PROXY=true \
             -p 8080:8080 -p 9090:9090 ridiculytics:ci
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8080/api/health >/dev/null && break
             sleep 1
           done
 
-          curl -sf -X POST http://127.0.0.1:8080/api/event \
-            -H 'Origin: https://example.com' \
-            -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36' \
-            -d '{"n":"pageview","d":"example.com","u":"https://example.com/ci"}'
+          # Five events, because a label has to clear ADMIT_MIN_COUNT before it
+          # is allowed to become a series. 8.8.8.8 is a stable public address
+          # the geo databases resolve.
+          for i in $(seq 1 5); do
+            curl -sf -X POST http://127.0.0.1:8080/api/event \
+              -H 'Origin: https://example.com' \
+              -H 'X-Forwarded-For: 8.8.8.8' \
+              -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36' \
+              -d '{"n":"pageview","d":"example.com","u":"https://example.com/ci"}'
+          done
           sleep 2
 
-          if ! curl -s http://127.0.0.1:9090/metrics | grep -q 'ridiculytics_pageviews_total'; then
+          metrics=$(curl -s http://127.0.0.1:9090/metrics)
+
+          if ! echo "$metrics" | grep -q 'ridiculytics_pageviews_total'; then
             echo "::error::the event did not reach the metrics endpoint"
             docker logs smoke
             exit 1
           fi
           echo "ingest to metrics round trip OK"
+
+          # The image ships DB-IP Lite. An image that builds, starts and
+          # ingests but resolves nothing is the exact regression this catches:
+          # it is invisible until somebody opens an empty country panel.
+          if ! echo "$metrics" | grep -q 'ridiculytics_geoip_lookups_total{result="hit"} [1-9]'; then
+            echo "::error::no geo lookup hit; the bundled databases were not found or not loaded"
+            docker logs smoke
+            exit 1
+          fi
+          # Matches a real ISO-3166 code, so neither the __none__ sentinel nor
+          # the always-present HELP line can pass this.
+          if ! echo "$metrics" | grep -qE 'ridiculytics_pageviews_by_country_total\{country="[A-Z]{2}"'; then
+            echo "::error::no country label resolved from the bundled database"
+            docker logs smoke
+            exit 1
+          fi
+          echo "bundled geo databases OK"
           docker rm -f smoke

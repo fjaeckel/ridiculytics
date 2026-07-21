@@ -107,3 +107,7 @@ legal advice, and your regulator is not us.
 anything copyleft would be a non-starter. Everything else is **AGPL-3.0**,
 which is the licence that stops someone wrapping this in a closed hosted
 product.
+
+The container image redistributes IP geolocation data from
+[DB-IP](https://db-ip.com) under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+If you deploy the image, that attribution requirement is yours too.
