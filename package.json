@@ -1,6 +1,6 @@
 {
   "name": "ridiculytics",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Tiny, cookieless analytics script for the ridiculytics collector.",
   "main": "web/counter.js",
   "files": ["web/counter.js", "web/counter.min.js", "LICENSE-MIT"],
