@@ -184,7 +184,11 @@ func newConfig() *Config {
 			SaltRotate:  24 * time.Hour,
 			ServeJS:     true,
 		},
-		Geo:      Geo{Provider: "none"},
+		// dbip with no paths means "use whatever databases you can find".
+		// The container ships DB-IP Lite, so this is what makes country and
+		// ASN work out of the box; where no database exists the provider
+		// degrades to the same empty result "none" would have produced.
+		Geo:      Geo{Provider: "dbip"},
 		Defaults: defaults(),
 	}
 	// Sentinel so we can tell "absent" from "explicitly empty" for PathLabels.

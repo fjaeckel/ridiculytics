@@ -20,11 +20,20 @@ geo:
   # dbip | maxmind | none
   #
   # dbip is the default because DB-IP Lite is CC-BY-4.0 and redistributable,
-  # so it ships in the container and needs no signup. MaxMind GeoLite2 is more
-  # accurate but requires an account and its EULA forbids redistribution.
-  provider: none
-  # city_db: /var/lib/ridiculytics/dbip-city-lite.mmdb
-  # asn_db:  /var/lib/ridiculytics/dbip-asn-lite.mmdb
+  # so the container ships country and ASN databases and needs no signup.
+  # MaxMind GeoLite2 is more accurate but requires an account and its EULA
+  # forbids redistribution.
+  provider: dbip
+  # With no paths set, databases are discovered in /var/lib/ridiculytics
+  # (mount your own here to keep them fresh) and then in the image's own
+  # /usr/share/ridiculytics/geo. Set a path to pin one explicitly; a path that
+  # does not exist is a startup error rather than a silent fallback.
+  #
+  # City is not in the image — it is 131 MB and the city dimension is opt-in.
+  # Build with --build-arg WITH_GEO_CITY=1, or mount it and point here:
+  # city_db:    /var/lib/ridiculytics/dbip-city-lite.mmdb
+  # country_db: /var/lib/ridiculytics/dbip-country-lite.mmdb
+  # asn_db:     /var/lib/ridiculytics/dbip-asn-lite.mmdb
 
 defaults:
   # Paths in the dedicated pageviews_total family.

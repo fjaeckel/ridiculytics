@@ -89,14 +89,17 @@ RIDICULYTICS_PATH_LABELS=none    # drop path labels entirely
 
 | variable | default | notes |
 |---|---|---|
-| `GEO_PROVIDER` | `none` | `dbip`, `maxmind` or `none` |
-| `GEO_CITY_DB` | | mmdb path |
-| `GEO_COUNTRY_DB` | | mmdb path, if you have no city database |
-| `GEO_ASN_DB` | | mmdb path |
+| `GEO_PROVIDER` | `dbip` | `dbip`, `maxmind` or `none` |
+| `GEO_CITY_DB` | | mmdb path; unset means discover |
+| `GEO_COUNTRY_DB` | | mmdb path; unset means discover |
+| `GEO_ASN_DB` | | mmdb path; unset means discover |
 | `REGION_ENABLED` | `false` | opt-in, no path label |
 | `CITY_ENABLED` | `false` | opt-in, no path label |
 
-See [deployment](deployment.md#geoip) for why the provider is pluggable.
+The container ships DB-IP Lite country and ASN databases, and with no path set
+they are discovered automatically — geo works with none of these variables. See
+[deployment](deployment.md#geoip) for the search order and why the provider is
+pluggable.
 
 ## Path rewrites
 

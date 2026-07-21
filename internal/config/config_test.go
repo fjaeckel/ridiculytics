@@ -91,6 +91,12 @@ sites:
 	if s.HasPathLabel(DimASN) {
 		t.Error("asn should not carry a path label by default")
 	}
+	// The container ships DB-IP Lite and the binary discovers it by path, so
+	// the default provider has to be dbip. Defaulting to none would mean the
+	// databases in the image are never opened.
+	if c.Geo.Provider != "dbip" {
+		t.Errorf("default geo provider = %q, want dbip", c.Geo.Provider)
+	}
 }
 
 func TestLoadRejectsBadConfigs(t *testing.T) {

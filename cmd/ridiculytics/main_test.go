@@ -77,6 +77,80 @@ func TestOpenGeoProviders(t *testing.T) {
 	})
 }
 
+// TestDiscoverGeo pins the discovery rules that make the shipped image work
+// with no configuration at all.
+func TestDiscoverGeo(t *testing.T) {
+	write := func(dir, name string) string {
+		t.Helper()
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	t.Run("nothing found", func(t *testing.T) {
+		city, country, asn := discoverGeo([]string{t.TempDir()})
+		if city != "" || country != "" || asn != "" {
+			t.Errorf("got %q/%q/%q, want all empty", city, country, asn)
+		}
+	})
+
+	// An operator-mounted database must win over the one baked into the image:
+	// the mounted one is the only one that can be refreshed.
+	t.Run("earlier directory wins", func(t *testing.T) {
+		mount, baked := t.TempDir(), t.TempDir()
+		want := write(mount, "dbip-country-lite.mmdb")
+		write(baked, "dbip-country-lite.mmdb")
+
+		_, country, _ := discoverGeo([]string{mount, baked})
+		if country != want {
+			t.Errorf("country = %q, want the mounted copy %q", country, want)
+		}
+	})
+
+	// Each kind resolves independently, so a mount holding only a city
+	// database still leaves country and ASN on the baked-in copies.
+	t.Run("kinds resolve independently", func(t *testing.T) {
+		mount, baked := t.TempDir(), t.TempDir()
+		wantCity := write(mount, "dbip-city-lite.mmdb")
+		wantASN := write(baked, "dbip-asn-lite.mmdb")
+
+		city, country, asn := discoverGeo([]string{mount, baked})
+		if city != wantCity {
+			t.Errorf("city = %q, want %q", city, wantCity)
+		}
+		if country != "" {
+			t.Errorf("country = %q, want empty", country)
+		}
+		if asn != wantASN {
+			t.Errorf("asn = %q, want %q", asn, wantASN)
+		}
+	})
+
+	// A mounted GeoLite2 directory should work without renaming anything.
+	t.Run("geolite2 filenames", func(t *testing.T) {
+		dir := t.TempDir()
+		want := write(dir, "GeoLite2-ASN.mmdb")
+
+		_, _, asn := discoverGeo([]string{dir})
+		if asn != want {
+			t.Errorf("asn = %q, want %q", asn, want)
+		}
+	})
+
+	// A directory named like a database must not be mistaken for one.
+	t.Run("directories are skipped", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, "dbip-country-lite.mmdb"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if _, country, _ := discoverGeo([]string{dir}); country != "" {
+			t.Errorf("country = %q, want empty", country)
+		}
+	})
+}
+
 // TestConfigFlagDefaultsToEnv pins the container-first behaviour: with no
 // -config flag the process must be configurable entirely from the environment.
 func TestConfigFlagDefaultsToEnv(t *testing.T) {

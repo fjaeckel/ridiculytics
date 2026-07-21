@@ -14,7 +14,10 @@ services:
     build:
       context: .
       args:
-        WITH_GEO: "0" # set to 1 to bake in DB-IP Lite geo databases
+        # Country and ASN are baked in. WITH_GEO_CITY=1 adds the 131 MB city
+        # database if you want to exercise the opt-in city dimension too.
+        WITH_GEO: ${WITH_GEO:-1}
+        WITH_GEO_CITY: ${WITH_GEO_CITY:-0}
     restart: unless-stopped
     ports:
       - "8080:8080" # public ingest only
