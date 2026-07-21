@@ -146,20 +146,37 @@ jobs:
   # counter.js reaches sites through jsDelivr, which serves from npm. Publishing
   # here is what makes cdn.jsdelivr.net/npm/ridiculytics@N/counter.min.js resolve.
   #
-  # jsDelivr also serves straight from a git tag with no npm involvement at all:
+  # Authentication is npm trusted publishing: the registry trusts this specific
+  # workflow file in this specific repo, and npm exchanges the Actions OIDC
+  # token for a short-lived credential at publish time. No NPM_TOKEN exists to
+  # leak or rotate. Renaming or moving this workflow breaks publishing until the
+  # trusted publisher entry on npmjs.com is updated to match.
+  #
+  # A fork has no trusted publisher entry and cannot get one for a package it
+  # does not own, so this job is skipped there rather than failing every tag.
+  # jsDelivr still serves a fork's releases straight from the git tag:
   #   https://cdn.jsdelivr.net/gh/OWNER/ridiculytics@vN/web/counter.min.js
-  # That path needs no secret, so this job is skipped rather than failed when
-  # NPM_TOKEN is absent.
   npm:
     name: Publish to npm for jsDelivr
     needs: verify
+    if: github.repository == 'fjaeckel/ridiculytics'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      # Node 22 ships npm 10.x. Trusted publishing needs the OIDC exchange that
+      # landed in npm 11.5.1, and older clients fail with a bare 404 on publish.
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - name: Build minified bundle
         run: |
@@ -172,27 +189,14 @@ jobs:
             exit 1
           fi
 
-      - name: Check for a publish token
-        id: token
-        run: |
-          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::NPM_TOKEN is not set, skipping npm publish. \
-              jsDelivr will still serve this release from the git tag."
-          fi
-
+      # Provenance is attested automatically under trusted publishing, so
+      # --provenance is not passed here.
       - name: Publish
-        if: steps.token.outputs.present == 'true'
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       # jsDelivr caches npm packages for up to 24h. Nudging it means the new
       # version is fetchable immediately rather than whenever the cache lapses.
       - name: Warm the jsDelivr cache
-        if: steps.token.outputs.present == 'true'
         continue-on-error: true
         run: |
           VERSION="${{ needs.verify.outputs.version }}"
