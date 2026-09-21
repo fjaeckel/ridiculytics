@@ -3,7 +3,7 @@ module github.com/fjaeckel/ridiculytics
 go 1.26.5
 
 require (
-	github.com/axiomhq/hyperloglog v0.2.6
+	github.com/axiomhq/hyperloglog v0.3.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/prometheus/client_golang v1.24.1
