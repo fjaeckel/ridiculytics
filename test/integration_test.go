@@ -168,6 +168,7 @@ func TestFullPipeline(t *testing.T) {
 		`class="xl"`,
 		`ridiculytics_sessions_total{site="example.com"} 1`,
 		`ridiculytics_unique_visitors{site="example.com",window="24h"} 1`,
+		`ridiculytics_unique_visitors{site="example.com",window="today"} 1`,
 	} {
 		mustContain(t, out, want)
 	}

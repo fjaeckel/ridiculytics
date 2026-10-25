@@ -91,6 +91,7 @@ func TestPerSiteEnvOverrides(t *testing.T) {
 		"SITE_EXAMPLE_COM_ORIGINS":        "https://example.com,https://staging.example.com",
 		"SITE_EXAMPLE_COM_CROSS_PATH_CAP": "10",
 		"SITE_EXAMPLE_COM_HMAC_KEY":       "s3cret",
+		"SITE_EXAMPLE_COM_TIMEZONE":       "Europe/Madrid",
 
 		// Dots become underscores, so a multi-label domain is addressable.
 		"SITE_BLOG_EXAMPLE_CO_UK_PATH_LABELS":             "country,referrer",
@@ -104,6 +105,9 @@ func TestPerSiteEnvOverrides(t *testing.T) {
 	if a.CrossPathCap != 10 {
 		t.Errorf("per-site cap = %d, want 10 (site must win over global)", a.CrossPathCap)
 	}
+	if a.Location().String() != "Europe/Madrid" {
+		t.Errorf("timezone = %v, want Europe/Madrid", a.Location())
+	}
 	if a.HMACKey != "s3cret" {
 		t.Errorf("hmac key = %q", a.HMACKey)
 	}
@@ -115,6 +119,9 @@ func TestPerSiteEnvOverrides(t *testing.T) {
 	}
 
 	b := c.Site("blog.example.co.uk")
+	if b.Location() != time.UTC {
+		t.Errorf("default timezone = %v, want UTC", b.Location())
+	}
 	if b.CrossPathCap != 50 {
 		t.Errorf("site without an override should inherit global, got %d", b.CrossPathCap)
 	}

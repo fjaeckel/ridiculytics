@@ -103,6 +103,52 @@ func TestWindowsInsertFeedsEveryWindow(t *testing.T) {
 			t.Errorf("window %s estimate = %d, want ~100", name, got)
 		}
 	}
+	if got := w.Today.Estimate(now); math.Abs(float64(got)-100)/100 > 0.05 {
+		t.Errorf("window today estimate = %d, want ~100", got)
+	}
+}
+
+func TestDailyResetsAtLocalMidnight(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := NewDaily()
+	evening := time.Date(2026, 10, 24, 23, 30, 0, 0, loc)
+	for i := 0; i < 50; i++ {
+		d.Insert(uint64(i), evening)
+	}
+	if got := d.Estimate(evening); got != 50 {
+		t.Errorf("same-day estimate = %d, want 50", got)
+	}
+
+	// 23:30 UTC is still the 24th in UTC but already the 25th in Madrid.
+	afterMidnight := evening.Add(time.Hour)
+	if got := d.Estimate(afterMidnight); got != 0 {
+		t.Errorf("estimate after local midnight = %d, want 0 before any insert", got)
+	}
+	d.Insert(1, afterMidnight)
+	if got := d.Estimate(afterMidnight); got != 1 {
+		t.Errorf("estimate on new day = %d, want 1", got)
+	}
+	if got := d.Estimate(afterMidnight.UTC()); got != 0 {
+		t.Errorf("estimate for the UTC day = %d, want 0", got)
+	}
+}
+
+func TestDailyIsMonotonicWithinADay(t *testing.T) {
+	d := NewDaily()
+	start := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	var prev uint64
+	for m := 0; m < 24*60; m++ {
+		now := start.Add(time.Duration(m) * time.Minute)
+		d.Insert(uint64(m%700), now)
+		got := d.Estimate(now)
+		if got < prev {
+			t.Fatalf("estimate fell from %d to %d at %v", prev, got, now)
+		}
+		prev = got
+	}
 }
 
 func TestRollingWindowDuration(t *testing.T) {

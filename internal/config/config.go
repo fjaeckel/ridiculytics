@@ -59,6 +59,9 @@ type Defaults struct {
 
 	RegionEnabled bool `yaml:"region_enabled"`
 	CityEnabled   bool `yaml:"city_enabled"`
+
+	// Timezone is the IANA zone whose midnight resets the "today" uniques.
+	Timezone string `yaml:"timezone"`
 }
 
 // Site is one tracked domain.
@@ -75,6 +78,7 @@ type Site struct {
 	Defaults `yaml:",inline"`
 
 	originSet map[string]struct{}
+	loc       *time.Location
 }
 
 // Rewrite is a regex path rewrite rule.
@@ -133,6 +137,14 @@ func (s *Site) AllowsOrigin(origin string) bool {
 	return ok
 }
 
+// Location returns the site's timezone, UTC if unset.
+func (s *Site) Location() *time.Location {
+	if s.loc == nil {
+		return time.UTC
+	}
+	return s.loc
+}
+
 // HasPathLabel reports whether a dimension carries the secondary path label.
 func (s *Site) HasPathLabel(dim string) bool {
 	for _, d := range s.PathLabels {
@@ -164,6 +176,7 @@ func defaults() Defaults {
 		AdmitMinCount: 3,
 		SessionTTL:    30 * time.Minute,
 		DecayAfter:    7 * 24 * time.Hour,
+		Timezone:      "UTC",
 		PathLabels: []string{
 			DimCountry, DimReferrer, DimSource, DimMedium, DimCampaign,
 			DimBrowser, DimOS, DimDevice, DimScreen, DimEvent,
@@ -258,6 +271,11 @@ func finalize(c *Config) error {
 		for _, o := range s.Origins {
 			s.originSet[strings.ToLower(strings.TrimSuffix(strings.TrimSpace(o), "/"))] = struct{}{}
 		}
+		loc, err := time.LoadLocation(s.Timezone)
+		if err != nil {
+			return fmt.Errorf("site %s: timezone %q: %w", s.Domain, s.Timezone, err)
+		}
+		s.loc = loc
 		for i := range s.PathRewrites {
 			re, err := regexp.Compile(s.PathRewrites[i].Match)
 			if err != nil {
@@ -298,6 +316,9 @@ func fillZero(d *Defaults, def Defaults) {
 	}
 	if d.DecayAfter == 0 {
 		d.DecayAfter = def.DecayAfter
+	}
+	if d.Timezone == "" {
+		d.Timezone = def.Timezone
 	}
 }
 
