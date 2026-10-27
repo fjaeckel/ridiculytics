@@ -127,9 +127,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ needs.verify.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.verify.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.verify.outputs.version }}
             type=raw,value=latest
 
       - uses: docker/build-push-action@v7
