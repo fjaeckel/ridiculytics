@@ -67,6 +67,16 @@ Two that are not negotiable without redesigning the storage model:
 
 ## Releases
 
+Versions are bumped by [release-please](https://github.com/googleapis/release-please).
+It keeps a release PR open that updates `package.json` and `CHANGELOG.md`
+from the conventional commits on `main`: `feat:` is a minor bump, `fix:` a
+patch, `feat!:` or a `BREAKING CHANGE:` footer a major. `deps:` commits are
+listed in the changelog but do not cut a release on their own. Merging the
+release PR tags `vX.Y.Z` and starts the release workflow.
+
+A release can still be cut by hand by bumping `package.json` and pushing the
+tag; dispatching the workflow from `main` instead publishes the same image tags.
+
 Tagging `vX.Y.Z` publishes, only after the full suite passes:
 
 - binaries for linux/darwin/windows/freebsd on amd64/arm64, plus checksums

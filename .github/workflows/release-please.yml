@@ -1,0 +1,37 @@
+name: Release Please
+
+# Keeps a release PR open that bumps package.json and CHANGELOG.md from the
+# conventional commits on main. Merging it tags vX.Y.Z and starts release.yml.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # Tags pushed with GITHUB_TOKEN don't trigger other workflows, so the
+      # release is started explicitly, on the tag ref.
+      - name: Start release
+        if: steps.rp.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" -f tag="$TAG"
