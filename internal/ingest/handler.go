@@ -151,7 +151,9 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	p.Domain = strings.ToLower(strings.TrimSpace(p.Domain))
 	site := cfg.Site(p.Domain)
 	if site == nil {
-		s.reject(w, origin, p.Domain, "unknown_site", http.StatusNotFound)
+		// The posted domain is caller-controlled; labelling by it would let
+		// anyone mint unbounded series.
+		s.reject(w, origin, "", "unknown_site", http.StatusNotFound)
 		return
 	}
 	if !site.AllowsOrigin(origin) {

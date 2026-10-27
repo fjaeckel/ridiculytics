@@ -168,10 +168,23 @@ func TestOriginAllowlistIsEnforced(t *testing.T) {
 }
 
 func TestUnknownSiteIsRejected(t *testing.T) {
-	srv, _ := newTestServer(t, testYAML)
-	body := `{"n":"pageview","d":"notmine.example","u":"https://notmine.example/"}`
-	if w := post(t, srv, body, "https://notmine.example", chromeUA); w.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", w.Code)
+	srv, reg := newTestServer(t, testYAML)
+	for _, d := range []string{"notmine.example", "also-not.example"} {
+		body := `{"n":"pageview","d":"` + d + `","u":"https://` + d + `/"}`
+		if w := post(t, srv, body, "https://"+d, chromeUA); w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404", w.Code)
+		}
+	}
+	drain(t, srv)
+
+	// Every unknown domain shares one series, whatever the caller posts.
+	if v := metricValue(t, reg, "ridiculytics_ingest_events_total",
+		map[string]string{"site": "unknown", "result": "unknown_site"}); v != 2 {
+		t.Errorf("unknown_site count under site=unknown = %v, want 2", v)
+	}
+	if v := metricValue(t, reg, "ridiculytics_ingest_events_total",
+		map[string]string{"site": "notmine.example"}); v != 0 {
+		t.Error("posted domain leaked into the site label")
 	}
 }
 

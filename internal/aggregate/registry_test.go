@@ -336,8 +336,8 @@ func TestUnknownSiteIsRejected(t *testing.T) {
 		t.Errorf("unknown site created %d series", n)
 	}
 	ing := gather(t, r, "ridiculytics_ingest_events_total")
-	if ing[key(map[string]string{"site": "evil.example", "result": "unknown_site"})] != 1 {
-		t.Errorf("expected unknown_site to be counted, got %v", ing)
+	if ing[key(map[string]string{"site": "unknown", "result": "unknown_site"})] != 1 {
+		t.Errorf("expected unknown_site to be counted under site=unknown, got %v", ing)
 	}
 }
 
