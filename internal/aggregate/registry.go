@@ -286,7 +286,7 @@ func (r *Registry) site(domain string) *siteState {
 func (r *Registry) Record(o Observation) {
 	st := r.site(o.Site)
 	if st == nil {
-		r.IngestEvents.WithLabelValues(o.Site, "unknown_site").Inc()
+		r.IngestEvents.WithLabelValues("unknown", "unknown_site").Inc()
 		return
 	}
 	if o.At.IsZero() {

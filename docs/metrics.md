@@ -34,7 +34,7 @@ ridiculytics_unique_visitors_by_path{site,path}    gauge, opt-in, 24h, coarse
 Self-observability:
 
 ```
-ridiculytics_ingest_events_total{site,result}
+ridiculytics_ingest_events_total{site,result}       site="unknown" for unconfigured domains
 ridiculytics_cardinality_capped_total{site,dimension}
 ridiculytics_label_values{site,dimension}
 ridiculytics_sessions_live{site}
