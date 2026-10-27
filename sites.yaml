@@ -72,6 +72,9 @@ defaults:
   session_ttl: 30m
   decay_after: 168h # 7d
 
+  # IANA zone whose midnight resets the window="today" uniques.
+  timezone: UTC
+
 sites:
   - domain: example.com
     origins:

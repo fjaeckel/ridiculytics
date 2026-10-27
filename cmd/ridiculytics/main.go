@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	_ "time/tzdata" // site timezones resolve without the image's zoneinfo
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 

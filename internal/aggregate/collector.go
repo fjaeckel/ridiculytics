@@ -84,6 +84,7 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 		gauge(descUnique, float64(w.D1.Estimate(now)), site, "24h")
 		gauge(descUnique, float64(w.D7.Estimate(now)), site, "7d")
 		gauge(descUnique, float64(w.D30.Estimate(now)), site, "30d")
+		gauge(descUnique, float64(w.Today.Estimate(now.In(st.cfg.Location()))), site, "today")
 
 		gauge(descSessionsLive, float64(st.sessions.Len()), site)
 		counter(descEvicted, float64(st.sessions.Evicted()), site)

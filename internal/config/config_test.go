@@ -108,6 +108,7 @@ func TestLoadRejectsBadConfigs(t *testing.T) {
 		"bad dimension":  "defaults:\n  path_labels: [country, nope]\nsites:\n  - {domain: a.example, origins: [\"https://a\"]}",
 		"bad rewrite":    "sites:\n  - domain: a.example\n    origins: [\"https://a\"]\n    path_rewrites:\n      - match: \"[\"\n        replace: x",
 		"malformed yaml": "sites: [oops",
+		"bad timezone":   "sites:\n  - {domain: a.example, origins: [\"https://a\"], timezone: Mars/Olympus}",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -35,16 +35,24 @@
   },
   "panels": [
     {
-      "id": 1, "type": "stat", "title": "Unique visitors (24h)",
+      "id": 7, "type": "stat", "title": "Visitors today",
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
-      "description": "HyperLogLog estimate, ~0.8% error. Sampled as a gauge, so use max_over_time for a specific day rather than summing.",
-      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "description": "Distinct visitors since local midnight in the site's configured timezone; resets to zero at midnight. HyperLogLog estimate, ~0.8% error.",
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "ridiculytics_unique_visitors{site=\"$site\", window=\"today\"}", "legendFormat": "visitors" }]
+    },
+    {
+      "id": 1, "type": "stat", "title": "Unique visitors (rolling 24h)",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "description": "Distinct visitors in the trailing 24 hours. Drops whenever the hour leaving the window had more visitors than the hour entering it. HyperLogLog estimate, ~0.8% error. Sampled as a gauge, so use max_over_time for a specific day rather than summing.",
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "color": { "mode": "fixed", "fixedColor": "purple" } } },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [{ "expr": "ridiculytics_unique_visitors{site=\"$site\", window=\"24h\"}", "legendFormat": "visitors" }]
     },
     {
       "id": 2, "type": "stat", "title": "Active now",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
       "description": "Distinct visitors in the last 5 minutes.",
       "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
@@ -52,14 +60,14 @@
     },
     {
       "id": 3, "type": "stat", "title": "Pageviews",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 0 },
       "fieldConfig": { "defaults": { "unit": "short" } },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [{ "expr": "sum(increase(ridiculytics_pageviews_total{site=\"$site\", path=~\"$path\"}[$__range]))" }]
     },
     {
       "id": 4, "type": "stat", "title": "Bounce rate",
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 0 },
       "description": "Sessions that ended after a single pageview. Not filterable by page: a bounce is a property of the session, not the page.",
       "fieldConfig": {
         "defaults": {
@@ -75,7 +83,7 @@
     },
     {
       "id": 5, "type": "stat", "title": "Avg session",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 0 },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [{
@@ -84,7 +92,7 @@
     },
     {
       "id": 6, "type": "stat", "title": "Views / session",
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 0 },
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 2 } },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [{

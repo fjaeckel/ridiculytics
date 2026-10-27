@@ -72,6 +72,7 @@ Explicit origins **replace** the inferred ones rather than extending them.
 | `UNIQUE_VISITORS_BY_PATH` | `false` | coarse 24h per-path sketch |
 | `SESSION_TTL` | `30m` | idle timeout |
 | `DECAY_AFTER` | `168h` | drop label values unseen this long |
+| `TIMEZONE` | `UTC` | IANA zone whose midnight resets `window="today"` |
 
 `PATH_LABELS` defaults to
 `country,referrer,source,medium,campaign,browser,os,device,screen,event` —

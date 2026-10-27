@@ -308,7 +308,7 @@ func (r *Registry) Record(o Observation) {
 		if st.sessions.Touch(o.VisitorID, purePath, o.At) {
 			r.entries.WithLabelValues(o.Site, purePath).Inc()
 		}
-		st.windows.Insert(o.VisitorID, o.At)
+		st.windows.Insert(o.VisitorID, o.At.In(st.cfg.Location()))
 		r.recordPathUnique(st, crossPath, o)
 	}
 

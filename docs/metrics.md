@@ -26,7 +26,7 @@ ridiculytics_bounces_total{site}
 ridiculytics_session_duration_seconds{site}
 ridiculytics_time_on_page_seconds{site,path}
 
-ridiculytics_unique_visitors{site,window}          gauge, window=1h|24h|7d|30d
+ridiculytics_unique_visitors{site,window}          gauge, window=1h|24h|7d|30d|today
 ridiculytics_visitors_active{site}                 gauge, 5m
 ridiculytics_unique_visitors_by_path{site,path}    gauge, opt-in, 24h, coarse
 ```
@@ -99,11 +99,16 @@ Uniques are HyperLogLog estimates over sliding windows, keyed by
 `hmac(rotating_salt, ip ‖ user-agent ‖ domain)`. The salt is random at boot,
 held only in memory, and rotated every 24h.
 
+The `1h`–`30d` windows slide, so they fall as well as rise: `24h` drops
+whenever the hour leaving the window had more visitors than the hour entering
+it. `today` is a calendar day instead — it only grows, and resets to zero at
+midnight in the site's `timezone` (default UTC).
+
 Sketches cannot be merged by Prometheus, so uniques exist **only** for the
 windows the server computes. For a specific day:
 
 ```promql
-max_over_time(ridiculytics_unique_visitors{window="24h"}[1d])
+max_over_time(ridiculytics_unique_visitors{window="today"}[1d])
 ```
 
 Two caveats, both inherent to counting people without storing anything about
@@ -111,9 +116,10 @@ them:
 
 - Arbitrary ranges are not derivable. There is no query that produces "uniques
   between these two dates" for a range that is not one of the fixed windows.
-- Salt rotation means a visitor spanning midnight UTC counts twice in the 7d
-  and 30d windows, so multi-day uniques skew slightly high. Fixing that would
-  require persisting an identifier.
+- Salt rotation means a visitor spanning a rotation counts twice in the
+  `today`, 7d and 30d windows, so those skew slightly high. The salt rotates
+  every 24h from boot, not at midnight. Fixing that would require
+  persisting an identifier.
 
 Counters restart at zero when the process does, which Prometheus handles
 natively via `rate`/`increase`. Sketch-backed gauges lose their history on

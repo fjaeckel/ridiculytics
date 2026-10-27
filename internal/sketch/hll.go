@@ -116,6 +116,48 @@ func (r *Rolling) Estimate(t time.Time) uint64 {
 // Window is the total span covered by the ring.
 func (r *Rolling) Window() time.Duration { return r.res * time.Duration(len(r.buckets)) }
 
+// Daily estimates distinct visitors since the most recent midnight. The day
+// is taken from the location of the time passed in, so callers convert to the
+// site's timezone first.
+type Daily struct {
+	mu  sync.Mutex
+	day int // yyyymmdd of the sketch below, 0 before the first insert
+	sk  *hyperloglog.Sketch
+}
+
+// NewDaily builds an empty calendar-day sketch.
+func NewDaily() *Daily { return &Daily{sk: hyperloglog.New14()} }
+
+func dayKey(t time.Time) int {
+	y, m, d := t.Date()
+	return y*10000 + int(m)*100 + d
+}
+
+// Insert records a visitor id on t's calendar day. A different day, including
+// one produced by a timezone change, starts a fresh sketch.
+func (d *Daily) Insert(id uint64, t time.Time) {
+	k := dayKey(t)
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if k != d.day {
+		d.sk = hyperloglog.New14()
+		d.day = k
+	}
+	d.sk.InsertHash(mix(id))
+}
+
+// Estimate returns the count for t's calendar day, or 0 if nothing has been
+// recorded on it yet.
+func (d *Daily) Estimate(t time.Time) uint64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if dayKey(t) != d.day {
+		return 0
+	}
+	return d.sk.Estimate()
+}
+
 // Windows bundles the standard set of unique-visitor windows for one site.
 type Windows struct {
 	Active *Rolling // 5m, for "right now"
@@ -123,10 +165,11 @@ type Windows struct {
 	D1     *Rolling
 	D7     *Rolling
 	D30    *Rolling
+	Today  *Daily // since local midnight in t's location
 }
 
 // NewWindows builds the standard ring set. Memory is roughly
-// (12+24+24+7+30) x 12KB ~= 1.2MB per site.
+// (12+24+24+7+30+1) x 12KB ~= 1.2MB per site.
 func NewWindows() *Windows {
 	return &Windows{
 		Active: NewRolling(time.Minute, 5, false),
@@ -134,14 +177,17 @@ func NewWindows() *Windows {
 		D1:     NewRolling(time.Hour, 24, false),
 		D7:     NewRolling(24*time.Hour, 7, false),
 		D30:    NewRolling(24*time.Hour, 30, false),
+		Today:  NewDaily(),
 	}
 }
 
-// Insert feeds a visitor id into every window.
+// Insert feeds a visitor id into every window. Only Today depends on t's
+// location.
 func (w *Windows) Insert(id uint64, t time.Time) {
 	w.Active.Insert(id, t)
 	w.H1.Insert(id, t)
 	w.D1.Insert(id, t)
 	w.D7.Insert(id, t)
 	w.D30.Insert(id, t)
+	w.Today.Insert(id, t)
 }

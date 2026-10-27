@@ -211,6 +211,7 @@ func applyEnvDefaults(e *env, prefix string, d *Defaults) {
 	e.bool(prefix+"CITY_ENABLED", &d.CityEnabled)
 	e.duration(prefix+"SESSION_TTL", &d.SessionTTL)
 	e.duration(prefix+"DECAY_AFTER", &d.DecayAfter)
+	e.str(prefix+"TIMEZONE", &d.Timezone)
 }
 
 func findSite(c *Config, domain string) *Site {
