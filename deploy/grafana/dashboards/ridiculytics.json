@@ -154,7 +154,7 @@
 
     {
       "id": 30, "type": "table", "title": "Countries",
-      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 21 },
+      "gridPos": { "h": 9, "w": 6, "x": 0, "y": 21 },
       "targets": [{
         "expr": "topk(20, sum by (country) (increase(ridiculytics_pageviews_by_country_total{site=\"$site\", path=~\"$path\"}[$__range])))",
         "instant": true, "format": "table"
@@ -166,17 +166,26 @@
     },
     {
       "id": 31, "type": "piechart", "title": "Browsers",
-      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 21 },
-      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "gridPos": { "h": 9, "w": 6, "x": 6, "y": 21 },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "values": ["value", "percent"] } },
       "targets": [{
         "expr": "sum by (browser) (increase(ridiculytics_pageviews_by_browser_total{site=\"$site\", path=~\"$path\"}[$__range]))",
         "legendFormat": "{{browser}}", "instant": true
       }]
     },
     {
+      "id": 33, "type": "piechart", "title": "Operating systems",
+      "gridPos": { "h": 9, "w": 6, "x": 12, "y": 21 },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "values": ["value", "percent"] } },
+      "targets": [{
+        "expr": "sum by (os) (increase(ridiculytics_pageviews_by_os_total{site=\"$site\", path=~\"$path\"}[$__range]))",
+        "legendFormat": "{{os}}", "instant": true
+      }]
+    },
+    {
       "id": 32, "type": "piechart", "title": "Devices",
-      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 21 },
-      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "gridPos": { "h": 9, "w": 6, "x": 18, "y": 21 },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "values": ["value", "percent"] } },
       "targets": [{
         "expr": "sum by (device) (increase(ridiculytics_pageviews_by_device_total{site=\"$site\", path=~\"$path\"}[$__range]))",
         "legendFormat": "{{device}}", "instant": true
